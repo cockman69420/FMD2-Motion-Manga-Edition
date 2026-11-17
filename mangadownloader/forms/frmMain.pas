@@ -594,6 +594,7 @@ type
     procedure miDownloadOpenFolderClick(Sender: TObject);
     procedure miFavoritesOpenWithClick(Sender: TObject);
     procedure miDownloadOpenWithClick(Sender: TObject);
+    procedure OpenMotionReaderClick(Sender: TObject);
     procedure miTrayExitClick(Sender: TObject);
     procedure miTrayFinishNothingClick(Sender: TObject);
     procedure miTrayShowDropBoxClick(Sender: TObject);
@@ -1206,7 +1207,12 @@ end;
 { TMainForm }
 
 procedure TMainForm.FormCreate(Sender: TObject);
+var MotionItem: TMenuItem;
 begin
+  MotionItem := TMenuItem.Create(Self);
+  MotionItem.Caption := 'Motion reader (offline)...';
+  MotionItem.OnClick := @OpenMotionReaderClick;
+  pmDownload.Items.Add(MotionItem);
   Randomize;
   FormMain := Self;
   winBuildNumber := 0;
@@ -4014,6 +4020,11 @@ begin
   if Assigned(vtDownload.FocusedNode) then
     with DLManager.Items[vtDownload.FocusedNode^.Index] do
       OpenWithExternalProgramChapters(DownloadInfo.SaveTo, ChapterNames);
+end;
+
+procedure TMainForm.OpenMotionReaderClick(Sender: TObject);
+begin
+  OpenDocument(ExtractFilePath(ParamStr(0)) + 'motion' + PathDelim + 'reader.html');
 end;
 
 procedure TMainForm.miTrayExitClick(Sender: TObject);

@@ -34,7 +34,7 @@ unit ImgInfos;
 interface
 
 uses
-  Classes, SysUtils, LazFileUtils, FPimage,
+  Classes, SysUtils, LazFileUtils, FPimage, MotionMedia,
   FPReadJPEG, FPReadPNG, FPReadGif, FPReadBMP, FPReadTiff,
   FPWriteJPEG, FPWritePNG, FPWriteBMP, FPWriteTiff;
 
@@ -629,11 +629,29 @@ begin
   end;
 end;
 
+function AVIFCheckImageStream(const Stream: TStream): Boolean;
+begin
+  Result := MotionMediaExt(Stream) = 'avif';
+end;
+
+function MP4CheckImageStream(const Stream: TStream): Boolean;
+begin
+  Result := MotionMediaExt(Stream) = 'mp4';
+end;
+
+function WEBMCheckImageStream(const Stream: TStream): Boolean;
+begin
+  Result := MotionMediaExt(Stream) = 'webm';
+end;
+
 initialization
   ImageHandlerMgr := TimageHandlerMgr.Create;
   ImageHandlerMgr.Add(TFPReaderJPEG, TFPWriterJPEG, @JPEGCheckImageStream, @JPEGGetImageSize, 'jpg');
   ImageHandlerMgr.Add(TFPReaderPNG, TFPWriterPNG, @PNGCheckImageStream, @PNGGetImageSize, 'png');
   ImageHandlerMgr.Add(nil, nil, @WEBPCheckImageStream, @WEBPGetImageSize, 'webp');
+  ImageHandlerMgr.Add(nil, nil, @AVIFCheckImageStream, nil, 'avif');
+  ImageHandlerMgr.Add(nil, nil, @MP4CheckImageStream, nil, 'mp4');
+  ImageHandlerMgr.Add(nil, nil, @WEBMCheckImageStream, nil, 'webm');
   ImageHandlerMgr.Add(TFPReaderGif, TFPWriterPNG, @GIFCheckImageStream, @GIFGetImageSize, 'gif', 'png');
   ImageHandlerMgr.Add(TFPReaderBMP, TFPWriterBMP, @BMPCheckImageStream, @BMPGetImageSize, 'bmp');
   ImageHandlerMgr.Add(TFPReaderTiff, TFPWriterTiff, @TIFFCheckImageStream, @TIFFGetImageSize, 'tif');

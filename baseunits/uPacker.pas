@@ -45,7 +45,7 @@ type
 implementation
 
 uses
-  frmMain;
+  frmMain, MotionMedia;
 
 procedure TPacker.FileFound(FileIterator: TFileIterator);
 begin
@@ -314,7 +314,7 @@ begin
     with TFileSearcher.Create do
       try
         OnFileFound := FileFound;
-        Search(Self.Path, '*.jpg;*.png;*.gif;*.webp', False, False);
+        Search(Self.Path, '*.jpg;*.png;*.gif;*.webp;*.avif;*.mp4;*.webm', False, False);
       finally
         Free;
       end;
@@ -326,6 +326,16 @@ begin
   end;
 
   FFileList.CustomSort(NaturalCustomSort);
+  // PDF/EPUB flatten animations or silently skip unsupported media.
+  // Fall back for this chapter only; keep the global output setting.
+  if Format in [pfPDF, pfEPUB] then
+    for i := 0 to FFileList.Count - 1 do
+      if MustPreserveMotionFile(FFileList[i]) then
+      begin
+        Format := pfCBZ;
+        Logger.SendWarning('Motion chapter saved as original-media CBZ: PDF/EPUB cannot preserve animation.');
+        Break;
+      end;
   case Format of
     pfZIP: FExt := '.zip';
     pfCBZ: FExt := '.cbz';

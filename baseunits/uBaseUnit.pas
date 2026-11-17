@@ -559,7 +559,7 @@ function WebPToJPEGStream(const AStream: TMemoryStream; const AQuality: Integer 
 function PNGToJPEGStream(const AStream: TMemoryStream; const AQuality: Integer = 80): Boolean;
 
 // try to save tmemorystream to file, return the saved filename if success, otherwise return empty string
-function SaveImageStreamToFile(Stream: TMemoryStream; Path, FileName: String; Age: LongInt = 0): String; overload;
+function SaveImageStreamToFile(Stream: TMemoryStream; Path, FileName: String; Age: LongInt = 0; PreserveOriginal: Boolean = False): String; overload;
 function SaveImageStreamToFile(AHTTP: THTTPSend; Path, FileName: String): String; overload;
 
 // check file exist with known extensions. AFilename is a filename without extensions
@@ -629,6 +629,7 @@ procedure SendLogException(const AText: String; AException: Exception); inline;
 implementation
 
 uses
+  MotionMedia,
   frmMain, WebsiteModules, webp, DCPrijndael, DCPsha512, FPWriteJPEG;
 
 {$IFDEF WINDOWS}
@@ -2275,7 +2276,7 @@ begin
   end;
 end;
 
-function SaveImageStreamToFile(Stream: TMemoryStream; Path, FileName: String; Age: LongInt): String;
+function SaveImageStreamToFile(Stream: TMemoryStream; Path, FileName: String; Age: LongInt; PreserveOriginal: Boolean): String;
 var
   p, f: String;
   fs: TFileStream;
@@ -2286,13 +2287,13 @@ begin
   p := CorrectPathSys(Path);
   if ForceDirectories(p) then begin
     f := GetImageStreamExt(Stream);
-    if f = 'png' then
+    if (f = 'png') and not PreserveOriginal and not MustPreserveMotion(Stream) then
     begin
       if OptionPNGSaveAsJPEG then
         if PNGToJPEGStream(Stream, OptionJPEGQuality) then f := 'jpg'
     end
     else
-    if f = 'webp' then
+    if (f = 'webp') and not PreserveOriginal and not MustPreserveMotion(Stream) then
     begin
       case OptionWebPSaveAs of
         1: if WebPToPNGStream(Stream, Tcompressionlevel(OptionPNGCompressionLevel)) then f := 'png';

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="da">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob: data:; media-src blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>FMD2 · Motion Reader</title>
+<style>
+:root{color-scheme:dark;font:15px/1.5 system-ui,sans-serif;background:#111316;color:#e9ebef;--accent:#b8f06c}
+*{box-sizing:border-box}body{margin:0}button,.button,select{font:inherit;color:inherit;background:#24282e;border:1px solid #41464f;border-radius:8px;padding:9px 14px;cursor:pointer}button:hover,.button:hover{border-color:var(--accent)}button:focus-visible,.button:focus-within,select:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+header{position:sticky;top:0;z-index:2;background:#171a1ff2;backdrop-filter:blur(15px);border-bottom:1px solid #30343c;padding:14px 24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}.brand{font-size:18px;font-weight:750;letter-spacing:-.4px}.brand span{color:var(--accent);font-weight:450}nav{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.button input{position:absolute;width:1px;height:1px;opacity:0}.primary{background:var(--accent);color:#152009;border-color:var(--accent);font-weight:650}.offline{margin-left:auto;color:#a7b1bd;font-size:12px}.offline:before{content:'●';color:var(--accent);margin-right:7px}
+#welcome{max-width:720px;margin:10vh auto;padding:28px}.eyebrow{color:var(--accent);font-size:12px;letter-spacing:2px;text-transform:uppercase}h1{font-size:clamp(32px,5vw,54px);line-height:1.12;letter-spacing:-1.5px;margin:18px 0}p{color:#b4bbc6}.formats{display:flex;gap:8px;flex-wrap:wrap;margin:26px 0}.formats span{border:1px solid #41464f;border-radius:5px;padding:5px 10px;font-size:12px;color:#c4cbd4}.hint{font-size:13px;border-top:1px solid #30343c;padding-top:20px}
+#toolbar{padding:12px 24px;display:flex;align-items:center;gap:15px;flex-wrap:wrap;border-bottom:1px solid #292d35}#chapter{max-width:min(650px,90vw)}#status{padding:10px 24px;color:#adb7c4;font-size:13px;min-height:40px}#status.error{color:#ffb3a7}#pages{max-width:960px;margin:0 auto 70px}figure{margin:0;position:relative}figure img,figure video{display:block;width:auto;max-width:100%;height:auto;margin:0 auto;background:#181b20}figure video{width:100%}figcaption{font-size:11px;color:#7e8998;padding:5px 12px;background:#14171b}figure.failed{padding:20px;border:1px solid #cc7161}figure.failed figcaption{color:#ffb3a7}#drop{border:1px dashed #56616f;border-radius:12px;padding:24px;margin-top:30px}body.drag #drop{border-color:var(--accent);background:#b8f06c12}[hidden]{display:none!important}input[type=range]{accent-color:var(--accent);width:120px}a{color:var(--accent)}
+@media(max-width:650px){header{padding:12px;gap:10px}.offline{display:none}#toolbar{padding:10px 12px}#welcome{margin:5vh auto;padding:24px}button,.button{padding:8px 10px}}
+</style>
+<header><div class="brand">FMD2 <span>Motion Reader</span></div><nav>
+<label class="button primary">Åbn kapitel<input id="files" type="file" accept=".cbz,.zip,.jpg,.jpeg,.png,.gif,.webp,.avif,.mp4,.webm" multiple></label>
+<label class="button">Åbn mappe<input id="folder" type="file" webkitdirectory multiple></label>
+<button id="reset" title="Luk de åbne filer">Luk</button></nav><span class="offline">Lokale filer · ingen netværksadgang</span></header>
+<section id="welcome"><div class="eyebrow">Din manga. I bevægelse.</div><h1>Originale billeder.<br>Hele animationen.</h1><p>Åbn en CBZ eller en mappe fra FMD2. Læseren viser originalfilerne direkte og bevarer deres opløsning og animation uden at konvertere dem.</p><div class="formats"><span>AVIF</span><span>WebP</span><span>GIF / APNG</span><span>MP4 / WebM</span><span>CBZ / ZIP</span></div><div id="drop">Træk et kapitel eller billedfiler ind i vinduet, eller vælg <strong>Åbn kapitel</strong>.</div><p class="hint">Brug en opdateret Edge eller Chrome. Video afhænger af browserens codecs. Home og End går til begyndelsen og slutningen. Filerne bliver på din computer.</p></section>
+<section id="toolbar" hidden><select id="chapter" aria-label="Kapitel"></select><label>Bredde <input id="width" type="range" min="400" max="1800" step="40" value="960"></label><button id="original">Original størrelse</button><button id="restart">Genstart animationer</button><button id="pause">Pause videoer</button></section>
+<div id="status" role="status" aria-live="polite"></div><main id="pages" aria-label="Kapitlets sider"></main>
+<script>
+'use strict';
+// GPL-2.0-or-later. No dependencies, fetching, transcoding or filesystem extraction.
+const $ = id => document.getElementById(id);
+const mediaPattern = /\.(?:jpe?g|png|gif|webp|avif|mp4|webm)$/i;
+const archivePattern = /\.(?:cbz|zip)$/i;
+const mime = {jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',gif:'image/gif',webp:'image/webp',avif:'image/avif',mp4:'video/mp4',webm:'video/webm'};
+const collator = new Intl.Collator('en', {numeric:true,sensitivity:'base'});
+let chapters = [], urls = [], generation = 0, paused = false, activeObserver = null;
+function status(text, error=false) { $('status').textContent=text; $('status').classList.toggle('error',error); }
+function clearPages() { if(activeObserver)activeObserver.disconnect();activeObserver=null;for(const u of urls) URL.revokeObjectURL(u); urls=[]; $('pages').replaceChildren(); }
+function reset() { generation++; clearPages(); chapters=[]; $('chapter').replaceChildren(); $('welcome').hidden=false; $('toolbar').hidden=true; $('files').value=''; $('folder').value=''; status(''); }
+function crc32(bytes) { let c=0xffffffff; for(const b of bytes){ c^=b; for(let n=0;n<8;n++) c=(c>>>1)^((c&1)?0xedb88320:0); } return (c^0xffffffff)>>>0; }
+function requireRange(offset,length,total){if(!Number.isSafeInteger(offset)||offset<0||length<0||offset+length>total) throw Error('Arkivet er beskadiget eller afkortet.');}
+async function readZip(file) {
+  if(file.size>2*1024**3) throw Error('Arkiver over 2 GB skal pakkes ud og åbnes som mappe.');
+  const bytes=new Uint8Array(await file.arrayBuffer()), v=new DataView(bytes.buffer), n=bytes.length;
+  let end=-1;
+  for(let p=n-22;p>=Math.max(0,n-65557);p--) if(v.getUint32(p,true)===0x06054b50 && p+22+v.getUint16(p+20,true)===n){end=p;break;}
+  if(end<0) throw Error('Filen er ikke et understøttet CBZ/ZIP-arkiv.');
+  if(v.getUint16(end+4,true)||v.getUint16(end+6,true)||v.getUint16(end+8,true)!==v.getUint16(end+10,true)) throw Error('Arkiver fordelt over flere filer understøttes ikke.');
+  const count=v.getUint16(end+10,true), size=v.getUint32(end+12,true), start=v.getUint32(end+16,true);
+  if(count===65535||start===0xffffffff||size===0xffffffff) throw Error('ZIP64 skal pakkes ud og åbnes som mappe.');
+  if(count>10000) throw Error('Arkivet indeholder for mange filer.');
+  requireRange(start,size,end);
+  const entries=[]; let p=start, expanded=0;
+  for(let i=0;i<count;i++){
+    requireRange(p,46,start+size);
+    if(v.getUint32(p,true)!==0x02014b50) throw Error('Arkivets indholdsfortegnelse er beskadiget.');
+    const flags=v.getUint16(p+8,true), method=v.getUint16(p+10,true), crc=v.getUint32(p+16,true), packed=v.getUint32(p+20,true), unpacked=v.getUint32(p+24,true), length=v.getUint16(p+28,true), extra=v.getUint16(p+30,true), comment=v.getUint16(p+32,true), local=v.getUint32(p+42,true);
+    requireRange(p+46,length+extra+comment,start+size);
+    const name=new TextDecoder('utf-8').decode(bytes.subarray(p+46,p+46+length));
+    p+=46+length+extra+comment;
+    if(!mediaPattern.test(name)) continue;
+    if(flags&1) throw Error('Adgangskodebeskyttede arkiver skal pakkes ud først.');
+    if(method!==0&&method!==8) throw Error('Arkivets komprimering understøttes ikke. Pak det ud først.');
+    if(unpacked>512*1024**2 || (expanded+=unpacked)>2*1024**3) throw Error('Arkivet er for stort. Pak det ud og åbn mappen.');
+    requireRange(local,30,start);
+    if(v.getUint32(local,true)!==0x04034b50||v.getUint16(local+8,true)!==method) throw Error('En fil i arkivet har en ugyldig overskrift.');
+    const offset=local+30+v.getUint16(local+26,true)+v.getUint16(local+28,true);
+    requireRange(offset,packed,start);
+    entries.push({name,async blob(){
+      let raw=bytes.subarray(offset,offset+packed);
+      if(method===8){
+        if(typeof DecompressionStream==='undefined') throw Error('Opdatér browseren, eller pak arkivet ud.');
+        const stream=new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+        const reader=stream.getReader(), chunks=[]; let total=0;
+        try { while(true){const {done,value}=await reader.read();if(done)break; total+=value.length; if(total>unpacked){await reader.cancel();throw Error('Forkert udpakket filstørrelse.');} chunks.push(value);} }
+        finally {reader.releaseLock();}
+        raw=new Uint8Array(total);let at=0;for(const chunk of chunks){raw.set(chunk,at);at+=chunk.length;}
+      }
+      if(raw.length!==unpacked||crc32(raw)!==crc) throw Error('Kontrolsummen er forkert. Arkivet er beskadiget.');
+      return new Blob([raw],{type:mime[name.split('.').pop().toLowerCase()]});
+    }});
+  }
+  if(!entries.length) throw Error('Arkivet indeholder ingen understøttede sider.');
+  return entries.sort((a,b)=>collator.compare(a.name,b.name));
+}
+async function openFiles(input) {
+  reset(); const token=generation; status('Åbner lokale filer …');
+  const groups=new Map();
+  for(const file of Array.from(input).sort((a,b)=>collator.compare(a.webkitRelativePath||a.name,b.webkitRelativePath||b.name))){
+    const name=file.webkitRelativePath||file.name;
+    if(archivePattern.test(name)) chapters.push({name,load:()=>readZip(file)});
+    else if(mediaPattern.test(name)){
+      const dir=name.includes('/')?name.slice(0,name.lastIndexOf('/')):'Valgte billeder';
+      if(!groups.has(dir))groups.set(dir,[]);
+      groups.get(dir).push({name,blob:async()=>new Blob([file],{type:mime[name.split('.').pop().toLowerCase()]})});
+    }
+  }
+  for(const [name,entries] of groups) chapters.push({name,load:async()=>entries});
+  chapters.sort((a,b)=>collator.compare(a.name,b.name));
+  if(token!==generation)return;
+  if(!chapters.length){status('Ingen understøttede filer fundet.',true);return;}
+  for(let i=0;i<chapters.length;i++){const option=document.createElement('option');option.value=i;option.textContent=chapters[i].name;$('chapter').append(option);}
+  $('welcome').hidden=true;$('toolbar').hidden=false;
+  await showChapter(0);
+}
+async function showChapter(index) {
+  const token=++generation; clearPages(); paused=false;$('pause').textContent='Pause videoer';status('Åbner kapitel …');
+  try {
+    const entries=await chapters[index].load(); if(token!==generation)return;
+    let failures=0,loaded=0;
+    const update=()=>status(`${entries.length} sider · ${loaded} indlæst${failures?' · '+failures+' afspilningsfejl':''}`,failures>0);
+    update();
+    const observer=new IntersectionObserver(items=>{for(const item of items)if(item.isIntersecting){observer.unobserve(item.target);item.target.loadMedia();}},{rootMargin:'1200px'});
+    activeObserver=observer;
+    for(let i=0;i<entries.length;i++){
+      const entry=entries[i], figure=document.createElement('figure'),caption=document.createElement('figcaption');
+      caption.textContent=`${i+1} / ${entries.length} · ${entry.name}`;figure.append(caption);figure.style.minHeight='160px';
+      let failed=false;
+      function fail(message){if(failed||token!==generation)return;failed=true;failures++;figure.classList.add('failed');caption.textContent+=` — ${message}`;update();}
+      figure.loadMedia=async()=>{
+        if(token!==generation){observer.disconnect();return;}
+        try {
+          const blob=await entry.blob();if(token!==generation)return;
+          const video=/\.(mp4|webm)$/i.test(entry.name),el=document.createElement(video?'video':'img');
+          el.addEventListener('error',()=>fail('Kan ikke afspilles. Prøv en opdateret Edge eller Chrome.'));
+          el.addEventListener(video?'loadeddata':'load',()=>{if(token!==generation)return;loaded++;figure.style.minHeight='';update();},{once:true});
+          if(video){el.controls=true;el.loop=true;el.muted=true;el.autoplay=!paused;el.playsInline=true;}else{el.alt=`Side ${i+1}`;el.decoding='async';}
+          const url=URL.createObjectURL(blob);urls.push(url);el.src=url;figure.prepend(el);
+        } catch(e){fail(e.message);}
+      };
+      $('pages').append(figure);observer.observe(figure);
+    }
+    window.scrollTo(0,0);
+  } catch(e){if(token===generation)status(e.message,true);}
+}
+$('files').addEventListener('change',e=>openFiles(Array.from(e.target.files)));
+$('folder').addEventListener('change',e=>openFiles(Array.from(e.target.files)));
+$('chapter').addEventListener('change',e=>showChapter(Number(e.target.value)));
+$('reset').onclick=reset;
+$('width').oninput=e=>{$('pages').style.maxWidth=e.target.value+'px';};
+$('original').onclick=()=>{$('pages').style.maxWidth='none';};
+$('restart').onclick=()=>{for(const el of $('pages').querySelectorAll('img,video')){if(el.tagName==='VIDEO'){el.currentTime=0;if(!paused)el.play().catch(()=>{});}else{const src=el.src;el.removeAttribute('src');el.src=src;}}};
+$('pause').onclick=()=>{paused=!paused;for(const video of $('pages').querySelectorAll('video'))paused?video.pause():video.play().catch(()=>{});$('pause').textContent=paused?'Afspil videoer':'Pause videoer';};
+window.addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('drag');});
+window.addEventListener('dragleave',()=>document.body.classList.remove('drag'));
+window.addEventListener('drop',e=>{e.preventDefault();document.body.classList.remove('drag');openFiles(Array.from(e.dataTransfer.files));});
+window.addEventListener('keydown',e=>{if(e.target.matches('input,select'))return;if(e.key==='Home')window.scrollTo(0,0);if(e.key==='End')window.scrollTo(0,document.body.scrollHeight);});
+window.addEventListener('beforeunload',clearPages);
+</script>
+</html>

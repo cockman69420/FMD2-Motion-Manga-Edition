@@ -44,6 +44,7 @@ uses
   LuaCrypto,
   LuaFileUtil,
   LuaStrings,
+  LuaMotionMedia,
   LuaImagePuzzle,
   LuaMangaFox,
   LuaLogger,

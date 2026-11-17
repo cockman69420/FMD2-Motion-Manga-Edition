@@ -1,0 +1,52 @@
+name: Check official FMD2 updates
+on:
+  schedule:
+    - cron: '37 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: motion-upstream-sync
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      branch: ${{ steps.merge.outputs.branch }}
+      state: ${{ steps.merge.outputs.state }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Merge in an isolated review branch
+        id: merge
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git config user.name 'FMD2 Motion sync'
+          git config user.email 'motion-sync@users.noreply.github.com'
+          ./motion/scripts/Sync-Upstream.ps1 -ResultFile sync-result.json
+      - name: Save synchronization and conflict report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: upstream-sync-report
+          path: |
+            sync-result.json
+            upstream-conflict.md
+          if-no-files-found: warn
+  validate:
+    needs: sync
+    if: needs.sync.outputs.state == 'merged-for-review'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/motion-build.yml
+    with:
+      ref: ${{ needs.sync.outputs.branch }}

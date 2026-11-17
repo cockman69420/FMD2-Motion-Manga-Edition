@@ -175,7 +175,7 @@ resourcestring
 
 implementation
 
-uses frmCustomColor, frmDialogYesNo, frmMain, frmCustomMessageDlg, FMDOptions, LazFileUtils;
+uses frmCustomColor, frmDialogYesNo, frmMain, frmCustomMessageDlg, FMDOptions, LazFileUtils, MotionUpdatePolicy;
 
 const
   // RFC 3339 - ISO 8601
@@ -396,6 +396,11 @@ var
   f: String;
   c: Boolean;
 begin
+  if IsProtectedMotionModule(FModule.name) then
+  begin
+    FModule.flag := fNone;
+    Exit;
+  end;
   FModule.oflag := FModule.flag;
   FModule.flag := fDownloading;
   FOwner.FOwner.ListDirty;
@@ -616,6 +621,18 @@ begin
       u := nil;
     end;
 
+    if (m <> nil) and IsProtectedMotionModule(m.name) then
+    begin
+      m.flag := fNone;
+      Inc(i);
+      Continue;
+    end;
+    if (u <> nil) and IsProtectedMotionModule(u.name) then
+    begin
+      Inc(j);
+      Continue;
+    end;
+
     if (m <> nil) and (u <> nil) then
     begin
       if u.SyncTo(m) then // look for new update
@@ -696,7 +713,7 @@ begin
   begin
     UpdateProgressBar(i + 1, FRepos.Items.Count);
     UpdateStatusText(RS_DeletingFlaggedModules);
-    if FRepos[i].flag = fDelete then
+    if (FRepos[i].flag = fDelete) and not IsProtectedMotionModule(FRepos[i].name) then
     begin
       m := FRepos[i];
       f := LUA_REPO_FOLDER + TrimFilename(m.Name);

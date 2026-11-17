@@ -21,6 +21,7 @@ type
     FNewVersionNumber: TProgramVersion;
     FNewVersionString: String;
     FUpdateURL: String;
+    FUpdateSHA256: String;
     FChangelog: String;
     procedure MainThreadUpdate;
     procedure SyncStartUpdate;
@@ -41,7 +42,7 @@ resourcestring
 implementation
 
 uses
-  frmMain, frmUpdateDialog, FMDVars, jsonini;
+  frmMain, frmUpdateDialog, FMDVars, jsonini, MotionUpdatePolicy;
 
 { TCheckUpdateThread }
 
@@ -67,6 +68,7 @@ begin
         with TSelfUpdaterThread.Create do
         begin
           UpdateURL := FUpdateURL;
+          ExpectedSHA256 := FUpdateSHA256;
           NewVersionString := FNewVersionString;
           Start;
         end;
@@ -101,9 +103,12 @@ end;
 procedure TCheckUpdateThread.Execute;
 var
   fmd_target, changelog_url: String;
+  RemoteMotion: TProgramVersion;
+  NewMotion: Boolean;
 begin
   FNewVersionString := '';
   FUpdateURL := '';
+  FUpdateSHA256 := '';
   FChangelog := '';
   changelog_url := '';
   fmd_target := lowercase(FMD_TARGETCPU + '-' + FMD_TARGETOS);
@@ -115,9 +120,12 @@ begin
         FNewVersionString := ReadString(fmd_target, 'version', '');
         if not TryStrToProgramVersion(FNewVersionString, FNewVersionNumber) then
           FNewVersionNumber := StrToProgramVersion('0.0.0.0');
-        if NewerVersion(FNewVersionNumber, FMD_VERSION_NUMBER) then
+        NewMotion := TryStrToProgramVersion(ReadString(fmd_target, 'motion_version', ''), RemoteMotion);
+        if NewMotion then NewMotion := NewerVersion(RemoteMotion, StrToProgramVersion(MOTION_VERSION));
+        if NewerVersion(FNewVersionNumber, FMD_VERSION_NUMBER) or NewMotion then
         begin
           FUpdateURL := ReadString(fmd_target, 'download_url', '');
+          FUpdateSHA256 := ReadString(fmd_target, 'sha256', '');
           changelog_url := ReadString(fmd_target, 'changelog_url', '');
         end;
       finally

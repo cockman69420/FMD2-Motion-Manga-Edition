@@ -1,0 +1,18 @@
+{
+  "lazarus": {"url":"https://download.lazarus-ide.org/Lazarus%20Windows%2064%20bits/Lazarus%204.8/lazarus-4.8-fpc-3.2.2-win64.exe","file":"lazarus48.exe","sha256":"ed25ee171d55e23cf14e0633159fdd2325efba56e186f8ab817ad3bf97d267d7"},
+  "extractor": {"url":"https://constexpr.org/innoextract/files/innoextract-1.9-windows.zip","file":"innoextract.zip","sha256":"6989342c9b026a00a72a38f23b62a8e6a22cc5de69805cf47d68ac2fec993065"},
+  "archives": [
+    {"name":"DCPcrypt","sha256":"5d016997fb008b6ec4c74760aae01f2ed70df91eeb9b2a6b7037a75ca42300eb"},
+    {"name":"MetaDarkStyle","sha256":"6a2df8987422e5614cb70888db9373155601aa6ae4a3aa340c647ebe8ebbce9d"},
+    {"name":"MultiLog","sha256":"b0d29f96c9ca8ca66bba340c07c387afba870220a24e70ccf106d71d0c63d0dd"},
+    {"name":"RichMemo","sha256":"82004928ad46f994acde6ea2b34ef85493d66199f4ef808ca0e9e5d3393ae618"},
+    {"name":"Synapse40.1","sha256":"78550641eda51b0d68eb8624b61bd46082650551479188d0d13c39ca163087b5"},
+    {"name":"VirtualTreeViewV5","sha256":"279e58ffd2f6aec45f4a0ccb832f268264e4f9ae137e77a78efaa9b76975cdcd"}
+  ],
+  "git": [
+    {"name":"internettools","url":"https://github.com/benibela/internettools.git","commit":"2724779c4287547137141ec9ec2a6df0af0f82af"},
+    {"name":"customcontrols","url":"https://github.com/NhKPaNdA/Lazarus_CustomControls.git","commit":"763ff58df5f84c67f9fa3dab7451f1f7a16fd72d"},
+    {"name":"flre","url":"https://github.com/BeRo1985/flre.git","commit":"147b5178d62f08d133954044769033d5a9d86861"},
+    {"name":"pucu","url":"https://github.com/BeRo1985/PUCU.git","commit":"60ca8230e47e12438a29fc53806936aa2b627dc5"}
+  ]
+}

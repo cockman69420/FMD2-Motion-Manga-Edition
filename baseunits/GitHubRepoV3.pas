@@ -53,7 +53,7 @@ type
 
 implementation
 
-uses jsonConf, jsonini, uBaseUnit, frmLuaModulesUpdater;
+uses jsonConf, jsonini, uBaseUnit, frmLuaModulesUpdater, MotionUpdatePolicy;
 
 function AppendURLDelim(const URL: String): String;
 begin
@@ -272,6 +272,7 @@ begin
 
             if s <> 'tree' then
             begin
+              if IsProtectedMotionModule(Get('path')) then Continue;
               item := TTreeItem.Create;
               item.path := Get('path');
               item.sha := Get('sha');

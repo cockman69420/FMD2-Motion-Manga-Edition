@@ -26,6 +26,7 @@ type
     procedure Execute; override;
   public
     UpdateURL: String;
+    ExpectedSHA256: String;
     NewVersionString: String;
     Filename: String;
     DownloadSuccess: Boolean;
@@ -46,7 +47,7 @@ resourcestring
 
 implementation
 
-uses FMDVars, frmMain, frmCustomMessageDlg;
+uses FMDVars, frmMain, frmCustomMessageDlg, MotionUpdatePolicy;
 
 { TSelfUpdaterThread }
 
@@ -115,10 +116,25 @@ begin
   DownloadSuccess := False;
   if UpdateURL = '' then
     Exit;
+  if not IsMotionUpdatePackage(UpdateURL) then
+  begin
+    FFailedMessage := 'An official FMD2 update is available. It must first be integrated and tested in the Motion fork. This package was blocked to preserve motion support.';
+    Exit;
+  end;
+  if Length(ExpectedSHA256) <> 64 then
+  begin
+    FFailedMessage := 'The Motion update manifest is missing a SHA-256 checksum. Update cancelled.';
+    Exit;
+  end;
   try
     UpdateStatusText(Format(RS_Downloading, [UpdateURL]));
     if HTTP.GET(UpdateURL) and (HTTP.ResultCode < 300) then
     begin
+      if not MotionPackageHashMatches(HTTP.Document, ExpectedSHA256) then
+      begin
+        FFailedMessage := 'The downloaded update failed its SHA-256 check. Update cancelled.';
+        Exit;
+      end;
       DownloadSuccess := True;
       Filename := FMD_DIRECTORY + UPDATE_PACKAGE_NAME;
       if FileExists(Filename) then
